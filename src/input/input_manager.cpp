@@ -156,7 +156,18 @@ void InputManager::update(float dt)
                 auto& controller = m_sdl_controller.at(event.jbutton.which);
                 if (controller->handleButton(event) &&
                     !UserConfigParams::m_gamepad_visualisation)
-                    input(controller->getEvent());
+                {
+                    if (UserConfigParams::m_gamepad_debug)
+                    {
+                        Log::info("InputManager", "button %i, status=%i",
+                            event.jbutton.button, event.type == SDL_JOYBUTTONDOWN);
+                    }
+                    dispatchInput(Input::IT_STICKBUTTON,
+                        controller->getEvent().JoystickEvent.Joystick,
+                        event.jbutton.button,
+                        Input::AD_POSITIVE,
+                        event.type == SDL_JOYBUTTONDOWN ? Input::MAX_VALUE : 0);
+                }
                 break;
             }
             default:
@@ -1062,38 +1073,6 @@ EventPropagation InputManager::input(const SEvent& event)
             dispatchInput(Input::IT_STICKMOTION, event.JoystickEvent.Joystick,
                           axis_id, Input::AD_NEUTRAL, value);
         }
-
-        GamePadDevice* gp =
-            getDeviceManager()->getGamePadFromIrrID(event.JoystickEvent.Joystick);
-
-        if (gp == NULL)
-        {
-            // Prevent null pointer crash
-            return EVENT_BLOCK;
-        }
-
-        for(int i=0; i<gp->getNumberOfButtons(); i++)
-        {
-            const bool isButtonPressed = event.JoystickEvent.IsButtonPressed(i);
-
-            // Only report button events when the state of the button changes
-            if ((!gp->isButtonPressed(i) &&  isButtonPressed) ||
-                 (gp->isButtonPressed(i) && !isButtonPressed)    )
-            {
-                if (UserConfigParams::m_gamepad_debug)
-                {
-                    Log::info("InputManager", "button %i, status=%i",
-                              i, isButtonPressed);
-                }
-
-                dispatchInput(Input::IT_STICKBUTTON,
-                              event.JoystickEvent.Joystick, i,
-                              Input::AD_POSITIVE,
-                              isButtonPressed ? Input::MAX_VALUE : 0);
-            }
-            gp->setButtonPressed(i, isButtonPressed);
-        }
-
     }
     else if (event.EventType == EET_KEY_INPUT_EVENT)
     {
