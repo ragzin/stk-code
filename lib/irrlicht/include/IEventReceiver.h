@@ -497,11 +497,6 @@ struct SEvent
 		 */
 		s16 Axis[NUMBER_OF_AXES];
 
-		//! The ID of the joystick which generated this event.
-		/** This is an internal Irrlicht index; it does not map directly
-		 * to any particular hardware joystick. */
-		u32 AxisChanged;
-
 		/** A bitmap of button states.  You can use IsButtonPressed() to
 		 ( check the state of each button from 0 to (NUMBER_OF_BUTTONS - 1) */
 		u32 ButtonStates;
@@ -510,15 +505,6 @@ struct SEvent
 		/** This is an internal Irrlicht index; it does not map directly
 		 * to any particular hardware joystick. */
 		u32 Joystick;
-
-		//! A helper function to check if a button is pressed.
-		bool IsAxisChanged(u32 axis) const
-		{
-			if(axis >= (u32)NUMBER_OF_AXES)
-				return false;
-
-			return (AxisChanged & (1 << axis)) ? true : false;
-		}
 
 		//! A helper function to check if a button is pressed.
 		bool IsButtonPressed(u32 button) const

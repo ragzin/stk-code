@@ -22,6 +22,8 @@
 
 #include <SDL.h>
 #include <IEventReceiver.h>
+#include <bitset>
+#include <vector>
 #include "utils/types.hpp"
 
 class GamePadDevice;
@@ -68,55 +70,66 @@ public:
             return false;
         m_irr_event.JoystickEvent.Axis[axis_idx] = event.jaxis.value;
         m_prev_axes[axis_idx] = event.jaxis.value;
-        uint32_t value = 1 << axis_idx;
-        m_irr_event.JoystickEvent.AxisChanged = value;
         return true;
     }   // handleAxis
     // ------------------------------------------------------------------------
-    bool handleHat(const SDL_Event& event)
+    bool handleHat(const SDL_Event& event,
+                   std::bitset<irr::SEvent::SJoystickEvent::NUMBER_OF_BUTTONS>&
+                   button_changed)
     {
         if (event.jhat.hat > m_hats)
             return false;
-        uint32_t value = 0;
+        std::bitset<4> status;
         // Up, right, down and left (4 buttons)
         switch (event.jhat.value)
         {
         case SDL_HAT_UP:
-            value = 1;
+            status[0] = true;
             break;
         case SDL_HAT_RIGHTUP:
-            value = 1 | (1 << 1);
+            status[0] = true;
+            status[1] = true;
             break;
         case SDL_HAT_RIGHT:
-            value = 1 << 1;
+            status[1] = true;
             break;
         case SDL_HAT_RIGHTDOWN:
-            value = (1 << 1) | (1 << 2);
+            status[1] = true;
+            status[2] = true;
             break;
         case SDL_HAT_DOWN:
-            value = 1 << 2;
+            status[2] = true;
             break;
         case SDL_HAT_LEFTDOWN:
-            value = (1 << 2) | (1 << 3);
+            status[2] = true;
+            status[3] = true;
             break;
         case SDL_HAT_LEFT:
-            value = 1 << 3;
+            status[3] = true;
             break;
         case SDL_HAT_LEFTUP:
-            value = (1 << 3) | 1;
+            status[3] = true;
+            status[0] = true;
             break;
         case SDL_HAT_CENTERED:
         default:
-            value = 0;
             break;
         }
-        int hat_start = m_buttons - (m_hats * 4);
-        unsigned hat_mask = (unsigned)((1 << hat_start) - 1);
-        m_irr_event.JoystickEvent.ButtonStates &= hat_mask;
-        value <<= hat_start;
-        value <<= (m_hats - 1) * 4;
-        m_irr_event.JoystickEvent.ButtonStates |= value;
-        m_irr_event.JoystickEvent.AxisChanged = 0;
+        std::bitset<4> prev_status;
+        int hat_start = m_buttons - (m_hats * 4) + (event.jhat.hat * 4);
+        for (unsigned i = 0; i < 4; i++)
+        {
+            int hat_button_id = i + hat_start;
+            prev_status[i] =
+                m_irr_event.JoystickEvent.IsButtonPressed(hat_button_id);
+            uint32_t value = 1 << hat_button_id;
+            if (status[i])
+                m_irr_event.JoystickEvent.ButtonStates |= value;
+            else
+                m_irr_event.JoystickEvent.ButtonStates &= (uint32_t)~value;
+            if (prev_status[i] != status[i])
+                button_changed[hat_button_id] = true;
+        }
         return true;
     }   // handleHat
     // ------------------------------------------------------------------------
@@ -135,7 +148,6 @@ public:
             m_irr_event.JoystickEvent.ButtonStates |= value;
         else
             m_irr_event.JoystickEvent.ButtonStates &= (uint32_t)~value;
-        m_irr_event.JoystickEvent.AxisChanged = 0;
         return true;
     }   // handleButton
     // ------------------------------------------------------------------------

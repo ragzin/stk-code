@@ -139,15 +139,49 @@ void InputManager::update(float dt)
                     controller->handleAxisInputSense(event);
                 if (controller->handleAxis(event) &&
                     !UserConfigParams::m_gamepad_visualisation)
-                    input(controller->getEvent());
+                {
+                    int axis_id = event.jaxis.axis;
+                    int value =
+                        controller->getEvent().JoystickEvent.Axis[axis_id];
+                    if (UserConfigParams::m_gamepad_debug)
+                    {
+                        Log::info("InputManager",
+                            "axis motion: gamepad_id=%d axis=%d value=%d",
+                            controller->getInstanceID(), axis_id, value);
+                    }
+                    dispatchInput(Input::IT_STICKMOTION,
+                        controller->getInstanceID(), axis_id, Input::AD_NEUTRAL,
+                        value);
+                }
                 break;
             }
             case SDL_JOYHATMOTION:
             {
                 auto& controller = m_sdl_controller.at(event.jhat.which);
-                if (controller->handleHat(event) &&
+                std::bitset<irr::SEvent::SJoystickEvent::
+                    NUMBER_OF_BUTTONS> button_changed;
+                if (controller->handleHat(event, button_changed) &&
                     !UserConfigParams::m_gamepad_visualisation)
-                    input(controller->getEvent());
+                {
+                    for (unsigned i = 0; i < button_changed.size(); i++)
+                    {
+                        if (button_changed[i])
+                        {
+                            bool is_pressed = controller->getEvent()
+                                .JoystickEvent.IsButtonPressed(i);
+                            if (UserConfigParams::m_gamepad_debug)
+                            {
+                                Log::info("InputManager",
+                                    "gamepad_id=%d, hat_button %i, status=%i",
+                                    controller->getInstanceID(), i, is_pressed);
+                            }
+                            dispatchInput(Input::IT_STICKBUTTON,
+                                controller->getInstanceID(), i,
+                                Input::AD_POSITIVE,
+                                is_pressed ? Input::MAX_VALUE : 0);
+                        }
+                    }
+                }
                 break;
             }
             case SDL_JOYBUTTONUP:
@@ -157,16 +191,18 @@ void InputManager::update(float dt)
                 if (controller->handleButton(event) &&
                     !UserConfigParams::m_gamepad_visualisation)
                 {
+                    bool is_pressed = controller->getEvent()
+                        .JoystickEvent.IsButtonPressed(event.jbutton.button);
                     if (UserConfigParams::m_gamepad_debug)
                     {
-                        Log::info("InputManager", "button %i, status=%i",
-                            event.jbutton.button, event.type == SDL_JOYBUTTONDOWN);
+                        Log::info("InputManager",
+                            "gamepad_id=%d, button %i, status=%i",
+                            controller->getInstanceID(), event.jbutton.button,
+                            is_pressed);
                     }
                     dispatchInput(Input::IT_STICKBUTTON,
-                        controller->getEvent().JoystickEvent.Joystick,
-                        event.jbutton.button,
-                        Input::AD_POSITIVE,
-                        event.type == SDL_JOYBUTTONDOWN ? Input::MAX_VALUE : 0);
+                        controller->getInstanceID(), event.jbutton.button,
+                        Input::AD_POSITIVE, is_pressed ? Input::MAX_VALUE : 0);
                 }
                 break;
             }
@@ -1054,27 +1090,7 @@ bool InputManager::masterPlayerOnly() const
 EventPropagation InputManager::input(const SEvent& event)
 {
     const float ORIENTATION_MULTIPLIER = 10.0f;
-    if (event.EventType == EET_JOYSTICK_INPUT_EVENT)
-    {
-        for (int axis_id=0; axis_id<SEvent::SJoystickEvent::NUMBER_OF_AXES ;
-              axis_id++)
-        {
-            if (!event.JoystickEvent.IsAxisChanged(axis_id))
-                continue;
-            int value = event.JoystickEvent.Axis[axis_id];
-
-            if (UserConfigParams::m_gamepad_debug)
-            {
-                Log::info("InputManager",
-                          "axis motion: gamepad_id=%d axis=%d value=%d",
-                          event.JoystickEvent.Joystick, axis_id, value);
-            }
-
-            dispatchInput(Input::IT_STICKMOTION, event.JoystickEvent.Joystick,
-                          axis_id, Input::AD_NEUTRAL, value);
-        }
-    }
-    else if (event.EventType == EET_KEY_INPUT_EVENT)
+    if (event.EventType == EET_KEY_INPUT_EVENT)
     {
         // On some systems (linux esp.) certain keys (e.g. [] ) have a 0
         // Key value, but do have a value defined in the Char field.
